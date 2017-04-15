@@ -12,6 +12,7 @@ import NotificationCenter
 
 class ViewController: UIViewController {
     public var imageURLParsed: String? = nil
+    public var parsedID: String? = nil
     var userName: String?
     
     let NTFKey = "ImageDidChange"
@@ -22,18 +23,38 @@ class ViewController: UIViewController {
         if ((FBSDKAccessToken.current()) != nil) {
             print("Access Token Activated");
             print("CURRENT TOKEN:\(FBSDKAccessToken.current().tokenString!)")
+            let access_t = "\(FBSDKAccessToken.current().tokenString!)"
             
-            let url = URL(string: "https://private-anon-552af0a44f-drugnews.apiary-proxy.com/users/login_by_facebook")!
+            let url = URL(string: "https://graph.facebook.com/me?fields=id,name&access_token=\(access_t)")! //посилання для отримання ID, по якому потім отримаєм зображення, але респонс видає тільки заголовок, без body, тому розпарсити та отримати айдішнік мені поки не вдалось
+            //let url = URL(string: "https://graph.facebook.com/100015045016071/picture?access_token="+access_t+"&type=large&redirect=false")! //тут я перевіряю чи працює запит зображення по айдішніку, захардкодивши свій айді (100015045016071), все працює, але звичайно толку від цього мало)
+            
             var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = "{\n  \"facebook_token\": \"\(FBSDKAccessToken.current().tokenString!)\"\n}".data(using: .utf8)
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            request.httpMethod = "GET"
             
             let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let data = data {
-                    do {
-                        print(data)
+                if let data1 = data {
+                    if let response1 = response {
+                        do {
+                            print("DATA: \(data1)")
+                            print("RESPONSE: \(response1)") //без поняття чому але вертає тільки заголовок, хоча в браузері повертає body, як і мало б бути
+                            if let json = try JSONSerialization.jsonObject(with: data1) as? [String: Any],
+                                let datas = json["data"] as? [String: Any],
+                                let id = datas["id"] as? String {
+                                    self.parsedID = id //парсинг джейсона
+                            }
+                            if let json = try JSONSerialization.jsonObject(with: data1) as? [String: Any],
+                                let datas = json["data"] as? [String: Any],
+                                let name = datas["name"] as? String {
+                                self.userName = name //парсинг джейсона
+                            }
+                            self.updateUI() //оновлюєм юайку розпарсеним джейсоном
+                            
+                        } catch {
+                            print("Error deserializing JSON: \(error)")
+                        }
                     }
+                    
                     
                 } else {
                     print(error ?? "")
@@ -59,9 +80,9 @@ class ViewController: UIViewController {
     }
     
     func updateUI() {
-        if let imgURL = imageURLParsed, let usersName = userName {
+        
+        if let imgURL = imageURLParsed {
             imageURLs = URL(string: imgURL)
-            self.setNameFunc(name: usersName)
             DispatchQueue.main.async {
             self.imageView.frame = CGRect(x: self.view.frame.width/2-64, y: self.view.frame.height/4-64, width: 128, height: 128)
             self.view.addSubview(self.imageView)
